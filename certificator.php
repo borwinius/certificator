@@ -174,7 +174,7 @@ $header = "-H \'Accept: text/html,application/xhtml+xml,application/xml\;q=0.9,*
 $myexecute = shell_exec("curl -k -u $CA_USER:$CA_PASSWORD https://$CA_SRV/certsrv/certfnsh.asp " .$header.
     "--data \"Mode=newreq&CertRequest=".$CERT."&CertAttrib=".$CERTATTRIB."&TargetStoreFlags=0&SaveCert=yes&ThumbPrint=\" ".
     " \| grep -A 1 \'function handleGetCert\(\) \{\' \| tail -n 1 ");
-if(str_contains($myexecute,"401")) {
+if(!str_contains($myexecute,"ReqID")) {
         die(var_dump($myexecute));
     }
 ###### search for requestID ################

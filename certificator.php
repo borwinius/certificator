@@ -69,26 +69,26 @@ if($error === false) {
   $CA_PASSWORD = $_POST['CA_PASSWORD'];
   $CA_DOMAIN = $_POST['CA_DOMAIN'];
 
-  $dn = array(
-      "commonName" => "$CNAME",
-      "countryName" => "DE",
-      "stateOrProvinceName" => "NRW",
-      "localityName" => "myTown",
-      "street" => "myStreet 1234",
-      "postalCode" => "123456",
-      "organizationName" => "myCompany",
-      "organizationalUnitName" => "IT",
-      "emailAddress" => "myemail@my.domain"
-  );
-  echo "<br>";
+
+$subject =    "/CN=$CNAME.$CA_DOMAIN".
+                "/C=DE".
+                "/ST=NRW".
+                "/L=myTown".
+                "/O=myCompany".
+                "/OU=IT".
+                "/emailAddress=myemail@my.domain".
+                "/postalCode=123456".
+                "/street=mystreet 1234";
+    
+echo "<br>";
 ##### $CA_SRV prüfen #####
 $ch = curl_init("HTTPS://" . $CA_SRV);
-curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
-curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-curl_setopt($ch, CURLOPT_NOBODY, true);
-#curl_setopt($ch, CURLOPT_USERPWD, "$CA_USER:$CA_PASSWORD");
-curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-curl_exec($ch);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_NOBODY, true);
+    #curl_setopt($ch, CURLOPT_USERPWD, "$CA_USER:$CA_PASSWORD");
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    curl_exec($ch);
 $ret = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 curl_close($ch);
 if ( !$ret ) {
@@ -114,10 +114,7 @@ else {
 if ($SAN) {
             echo "<table width='800' ><tr><td style=\"white-space:nowrap;\" width='250'>additional SAN:</td><td>$SAN</td></tr></table><br>";
           }
-echo "Distinguished Names:<hr>";
-foreach($dn as $key=>$res) {
-                            echo "<table width='350'><tr><td width='250'>$key</td><td>$res</td></tr></table>";
-                            }
+echo "Subjects:<hr>$subject";
 echo "<br>Files:<hr>";
 ##### SAN gefixt #####
 ##### Configfile erstellen #####
@@ -135,55 +132,32 @@ if (file_put_contents("$CNAME.config",$conf)) {
         echo "<table width='350'><tr><td width='250'>$CNAME.config</td><td>saved</td></tr></table>"; }
 else { die("ERROR: $CNAME.config could not be saved<br>"); }
 ##### Ende Configfile ######
-##### Anfang keygen   ######
-$keypair = openssl_pkey_new();
-#print_r(openssl_pkey_get_details($keypair));
-if ($keypair) {
-    openssl_pkey_export($keypair, $private_key);
-    if ($private_key) {
-        echo "<table width='350'><tr><td width='250'>$CNAME.key</td><td>exported</td></tr></table>";
-    }
-    else {
-            die("ERROR: $CNAME.key could not be exported<br>");
-         }
-}
-else {
-        die("Error generating key pair<br>");
-     }
-    if (file_put_contents("$CNAME.key",$private_key)) {
-        echo "<table width='350'><tr><td width='250'>$CNAME.key</td><td>saved</td></tr></table>"; }
-    else {
-            die("ERROR: $CNAME.key could not be saved<br>");
-         }
-#exit;
-##### ende keygen #####
-##### create csrgen #####
-$csr = openssl_csr_new($dn, $privkey, [
-    "req_extensions" => "v3_req",
-#    "digest_alg" => "sha256",
-    "config" => "$CNAME.config",
-    ]);
+##### Anfang create key and csr  ###########################
+ $myexecute = shell_exec("openssl req -nodes -newkey rsa:4096 -keyout $CNAME.key -out $CNAME.csr ".
+                        "-subj \"$subject\" ".
+                        "-addext \"subjectAltName = DNS:$CNAME,DNS:$CNAME.$CA_DOMAIN$COMMA$SAN \" ".
+                        "-addext \"extendedKeyUsage = clientAuth\" ");
+ if (file_exists("$CNAME.key")) {
+     echo "<table width='350'><tr><td width='250'>$CNAME.key</td><td>saved</tr></table>"; }
+ else { die("ERROR: Failed to write $CNAME.key<br>");}
 
-if ($csr === false) {  die('Failed to generate CSR: ' . openssl_error_string()); }
-##### export csr #####
-$csrout = '';
-if (!openssl_csr_export($csr, $csrout)) {
-    die('ERROR: Failed to export CSR: ' . openssl_error_string());
-}
-else {
-        echo "<table width='350'><tr><td width='250'>$CNAME.csr</td><td>exported</td></tr></table>";
-     }
-if (!file_put_contents("$CNAME.csr",$csrout)) {
-    die("ERROR: Failed to write CSR $CNAME.csr<br>");
+ $ret = file_get_contents("$CNAME.key");
+ if (!str_contains("$ret","-----BEGIN PRIVATE KEY")) {
+        die("ERROR: $CNAME.key not a valid key<br>");
     }
-else {
-        echo "<table width='350'><tr><td width='250'>$CNAME.csr</td><td>saved</td></tr></table>";
-     }
-##### ende csrgen ##########################################
-#exit;
+ if (file_exists("$CNAME.csr")) {
+     echo "<table width='350'><tr><td width='250'>$CNAME.csr</td><td>saved</tr></table>"; }
+ else { die("ERROR: Failed to write $CNAME.csr<br>");}
+
+ $ret = file_get_contents("$CNAME.csr");
+ if (!str_contains("$ret","-----BEGIN CERTIFICATE REQUEST")) {
+        die("ERROR: $CNAME.csr not a valid csr<br>");
+    }
+##### end create key and csr ###############################
 ##### Anfang request #######################################
 ##### Ersetzung in csr von + durch %2B #####
-$CERT = str_replace("+","%2B",$csrout);
+$CERT = file_get_contents("$CNAME.csr");
+$CERT = str_replace("+","%2B",$CERT);
 ##### Ersetzung in csr von Leerzeichen durch + #####
 $CERT = str_replace(" ","+",$CERT);
 $CERTATTRIB = "CertificateTemplate:$CA_TMPL%0D%0A";
@@ -229,7 +203,6 @@ $cname_ret = file_get_contents("$CNAME.pem");
 if (!str_contains("$cname_ret","-----BEGIN CERTIFICATE")) {
         die("ERROR: $CNAME.pem not a cert<br>");
     }
-
 ##### get ca-cert #############################
 $myexecute = shell_exec("curl -k -u $CA_USER:$CA_PASSWORD https://$CA_SRV/certsrv/certnew.p7b?ReqID=CACert&Renewal=2&Enc=bin");
 if (!str_contains("$myexecute","-----BEGIN CERTIFICATE")) {
@@ -240,7 +213,6 @@ if (file_put_contents("$CA_SRV.p7b",$myexecute)) {
 else {
         die("ERROR: $CA_SRV.p7b could not be saved<br>");
      }
-
 ##### convert p7b to pem ########################
 $myexecute = shell_exec("openssl pkcs7 -print_certs  -in $CA_SRV.p7b -out $CA_SRV.pem");
 if (file_exists("$CA_SRV.pem")) {
@@ -255,7 +227,6 @@ $ca_ret = file_get_contents("$CA_SRV.pem");
 if (!str_contains($ca_ret,"-----BEGIN CERTIFICATE")) {
         die("ERROR: $CA_SRV.pem not a cert<br>");
     }
-
 ##### concat cname.pem with cachain.pem ##########
 if (file_put_contents("$CNAME.chain.pem",$ca_ret . $cname_ret)) {
         echo "<table width='350'><tr><td width='250'>$CNAME.chain.pem</td><td>saved</td></tr></table>";
@@ -263,8 +234,6 @@ if (file_put_contents("$CNAME.chain.pem",$ca_ret . $cname_ret)) {
 else {
         die("ERROR: $CNAME_chain.pem could not be saved<br>");
      }
-
-
 ##### Ende curlscripte ############################
 echo "<br><br><br><table><tr>";
 echo '<td><form name="download" id="2" enctype="text/html"></td>

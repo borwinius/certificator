@@ -10,7 +10,7 @@ get a key and certificate with Aliases as .cer, .pem, .chain.pem and cacertifcat
   copy the ``certificator.php`` to e.g. ``/var/www/html/``  
   ``chown www-data certificator.php``  
   www-data should be writeable to ``/var/www/html/``  
-  edit once your DNs in the certificator.php
+  edit once your Subjects in the certificator.php
 ## Using
   go to your webserver https://mylinuxhost/certificator.php  
   ![startpage](certificator1.png)  

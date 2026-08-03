@@ -6,7 +6,7 @@
 <body></body>
 
 <?php
-### certificator.php / richard@borwinius.de / 2024
+### certificator.php / rb / 2024
 ### connect to a ms-caserver and download a certificates
 #########################################################
 // Formular mit Fehlerauswertung
@@ -15,7 +15,7 @@ $search1 = "<A Href=\"certnew.cer?ReqID=";
 $errorFelder = array();
 $error = null;
 $felder = array("CNAME","CA_SRV","CA_TMPL","CA_USER","CA_PASSWORD","CA_DOMAIN");
-$ClientIP = $_Server['REMOTE_ADDR'];
+$ClientIP = $_SERVER['REMOTE_ADDR'];
 $Server = gethostname();
 #########################################################
 function deleteLineInFile($file,$string)
@@ -69,36 +69,34 @@ if($error === false) {
   $CA_PASSWORD = $_POST['CA_PASSWORD'];
   $CA_DOMAIN = $_POST['CA_DOMAIN'];
 
-
-$subject =    "/CN=$CNAME.$CA_DOMAIN".
+  $subject =    "/CN=$CNAME.$CA_DOMAIN".
                 "/C=DE".
                 "/ST=NRW".
                 "/L=myTown".
                 "/O=myCompany".
                 "/OU=IT".
-                "/emailAddress=myemail@my.domain".
-                "/postalCode=123456".
-                "/street=mystreet 1234";
-    
-echo "<br>";
+                "/emailAddress=mymail@mycompany.com".
+                "/postalCode=12345".
+                "/street=my street 4711";
+  echo "<br>";
 ##### $CA_SRV prüfen #####
-$ch = curl_init("HTTPS://" . $CA_SRV);
-    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-    curl_setopt($ch, CURLOPT_NOBODY, true);
-    #curl_setopt($ch, CURLOPT_USERPWD, "$CA_USER:$CA_PASSWORD");
-    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-    curl_exec($ch);
-$ret = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-curl_close($ch);
-if ( !$ret ) {
-    die("ERROR: https://$CA_SRV not available<br>");
-    }
-##### SAN fixen #####
-if (!preg_match('/^[A-Za-z]/',$SAN)) {
-    unset ($SAN);
+ $ch = curl_init("HTTPS://" . $CA_SRV);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_NOBODY, true);
+        #curl_setopt($ch, CURLOPT_USERPWD, "$CA_USER:$CA_PASSWORD");
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_exec($ch);
+ $ret = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+ curl_close($ch);
+ if ( !$ret ) {
+     die("ERROR: https://$CA_SRV not available<br>");
      }
-else {
+##### SAN fixen #####
+ if (!preg_match('/^[A-Za-z]/',$SAN)) {
+         unset ($SAN);
+     }
+ else {
         $SAN = preg_replace(
           array('/,/', '/;/', '/ /', '/&/', '/\|/'   ), /* Nach diesen suchen ...  */
           array(':', ':', ':', ':', ':'), /* ... durch diese ersetzen ... */
@@ -111,31 +109,28 @@ else {
         $COMMA = ',';
     }
 
-if ($SAN) {
+ if ($SAN) {
             echo "<table width='800' ><tr><td style=\"white-space:nowrap;\" width='250'>additional SAN:</td><td>$SAN</td></tr></table><br>";
           }
-echo "Subjects:<hr>$subject";
-echo "<br>Files:<hr>";
+ echo "Subjects:<hr>$subject<br>";
+ echo "<br>Files:<hr>";
 ##### SAN gefixt #####
 ##### Configfile erstellen #####
-$conf = "[ req ]\n";
-$conf .= "distinguished_name = req_distinguished_name\n";
-$conf .= "req_extensions = v3_req\n";
-$conf .= "default_bits = 4096\n";
-$conf .= "[ req_distinguished_name ]\n";
-$conf .= "[ v3_req ]\n";
-#basicConstraints = CA:FALSE
-#keyUsage = nonRepudiation, digitalSignature, keyEncipherment
-$conf .= "extendedKeyUsage = serverAuth, clientAuth\n";
-$conf .= "subjectAltName = DNS:$CNAME,DNS:$CNAME.$CA_DOMAIN$COMMA$SAN\n";
-if (file_put_contents("$CNAME.config",$conf)) {
+ $conf = "[ req ]\n";
+ $conf .= "distinguished_name = req_distinguished_name\n";
+ $conf .= "req_extensions = v3_req\n";
+ $conf .= "default_bits = 4096\n";
+ $conf .= "[ req_distinguished_name ]\n";
+ $conf .= "[ v3_req ]\n";
+ $conf .= "extendedKeyUsage = serverAuth, clientAuth\n";
+ $conf .= "subjectAltName = DNS:$CNAME,DNS:$CNAME.$CA_DOMAIN$COMMA$SAN\n";
+ if (file_put_contents("$CNAME.config",$conf)) {
         echo "<table width='350'><tr><td width='250'>$CNAME.config</td><td>saved</td></tr></table>"; }
-else { die("ERROR: $CNAME.config could not be saved<br>"); }
+ else { die("ERROR: $CNAME.config could not be saved<br>"); }
 ##### Ende Configfile ######
-##### Anfang create key and csr  ###########################
- $myexecute = shell_exec("openssl req -nodes -newkey rsa:4096 -keyout $CNAME.key -out $CNAME.csr ".
+##### Anfang create key and csr  ######
+ $myexecute = shell_exec("openssl req -nodes -newkey rsa:4096 -config $CNAME.config -keyout $CNAME.key -out $CNAME.csr ".
                         "-subj \"$subject\" ".
-                        "-addext \"subjectAltName = DNS:$CNAME,DNS:$CNAME.$CA_DOMAIN$COMMA$SAN \" ".
                         "-addext \"extendedKeyUsage = clientAuth\" ");
  if (file_exists("$CNAME.key")) {
      echo "<table width='350'><tr><td width='250'>$CNAME.key</td><td>saved</tr></table>"; }
@@ -174,7 +169,7 @@ $header = "-H \'Accept: text/html,application/xhtml+xml,application/xml\;q=0.9,*
 $myexecute = shell_exec("curl -k -u $CA_USER:$CA_PASSWORD https://$CA_SRV/certsrv/certfnsh.asp " .$header.
     "--data \"Mode=newreq&CertRequest=".$CERT."&CertAttrib=".$CERTATTRIB."&TargetStoreFlags=0&SaveCert=yes&ThumbPrint=\" ".
     " \| grep -A 1 \'function handleGetCert\(\) \{\' \| tail -n 1 ");
-if(!str_contains($myexecute,"ReqID")) {
+if(str_contains($myexecute,"401")) {
         die(var_dump($myexecute));
     }
 ###### search for requestID ################
@@ -203,6 +198,7 @@ $cname_ret = file_get_contents("$CNAME.pem");
 if (!str_contains("$cname_ret","-----BEGIN CERTIFICATE")) {
         die("ERROR: $CNAME.pem not a cert<br>");
     }
+
 ##### get ca-cert #############################
 $myexecute = shell_exec("curl -k -u $CA_USER:$CA_PASSWORD https://$CA_SRV/certsrv/certnew.p7b?ReqID=CACert&Renewal=2&Enc=bin");
 if (!str_contains("$myexecute","-----BEGIN CERTIFICATE")) {
@@ -227,6 +223,7 @@ $ca_ret = file_get_contents("$CA_SRV.pem");
 if (!str_contains($ca_ret,"-----BEGIN CERTIFICATE")) {
         die("ERROR: $CA_SRV.pem not a cert<br>");
     }
+
 ##### concat cname.pem with cachain.pem ##########
 if (file_put_contents("$CNAME.chain.pem",$ca_ret . $cname_ret)) {
         echo "<table width='350'><tr><td width='250'>$CNAME.chain.pem</td><td>saved</td></tr></table>";
@@ -234,6 +231,18 @@ if (file_put_contents("$CNAME.chain.pem",$ca_ret . $cname_ret)) {
 else {
         die("ERROR: $CNAME_chain.pem could not be saved<br>");
      }
+
+##### Automatischer Modulus-Abgleich zur Validierung
+    $key_mod = shell_exec("openssl rsa -noout -modulus -in $CNAME.key");
+    $cert_mod = shell_exec("openssl x509 -noout -modulus -in $CNAME.pem");
+
+    if ($key_mod === $cert_mod && !empty($key_mod)) {
+        echo "<h3 style='color:green;'>Erfolg: Key und PEM-Zertifikat besitzen den identischen Modulus!</h3>";
+    } else {
+        echo "<h3 style='color:red;'>Kritischer Fehler: Modulus unterscheidet sich!</h3>";
+    }
+
+
 ##### Ende curlscripte ############################
 echo "<br><br><br><table><tr>";
 echo '<td><form name="download" id="2" enctype="text/html"></td>
@@ -253,7 +262,7 @@ echo '<form method="post">
 }
 else {
   if($error === true)
-   echo "<b>ERROR: All Fields are filled?</b>";
+   echo "<b>Es ist ein Fehler aufgetreten, sind alle Felder ausgefüllt?</b>";
 ############### ENDE Ausgabe ######################
   ?>
 <!--
@@ -263,8 +272,8 @@ else {
  <form  method="post" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF'])?>">
  <h2><font color=red>CERTIFICATOR</font></h2>
  <br><br>
-<h3>holt Domaincertificate from an Windows-CA<br></h3>
-your Computer-IP: "<?php echo $_SERVER['REMOTE_ADDR']; ?>"<br><br>
+<h3>holt Domänenzertifikate von einer Windows-CA<br></h3>
+Anfrage von Rechner: "<?php echo $_SERVER['REMOTE_ADDR']; ?>"<br><br>
 <table>
 <tr>
 <td>Common Name:</td>
@@ -274,40 +283,40 @@ your Computer-IP: "<?php echo $_SERVER['REMOTE_ADDR']; ?>"<br><br>
 </tr>
 <tr>
 <td>Subject Alternative Names:</td>
-<td><input name="SAN" type="text" size="55" value="myalias1 myalias1.my.dom.ain myalias2 myalias2.mysecond.dom.ain"
+<td><input name="SAN" type="text" size="55" value="myalias1 myalias1.my.dom.ain myalias2 myalias2.my.dom.ain"
     <?php if(isset($errorFelder['SAN'])) echo 'class="error"'; ?>>
 </td>
 </tr>
 <tr>
 <td>CA-Server:</td>
 <td>
-  <input name="CA_SRV" type="text" size="55" value="myWinCASRV.my.dom.ain"
+  <input name="CA_SRV" type="text" size="55" value="myWinCASrv.my.dom.ain"
     <?php if(isset($errorFelder['CA_SRV'])) echo 'class="error"'; ?>>
 </td>
 </tr>
 <tr>
  <td> CA-Template:</td>
 <td>
-  <input name="CA_TMPL" type="text" size="55" value="myTemplate_1year"
+  <input name="CA_TMPL" type="text" size="55" value="My_Template_for_Web"
     <?php if(isset($errorFelder['CA_TMPL'])) echo 'class="error"'; ?>>
  </td>
 </tr>
 <tr>
-  <td>CA-User:</td>
+  <td>CA-Benutzer:</td>
 <td>
   <input name="CA_USER" type="text" size="55" value="mycauser@my.dom.ain"
     <?php if(isset($errorFelder['CA_USER'])) echo 'class="error"'; ?>>
 </td>
 </tr>
 <tr>
-  <td>CA-Password:</td>
+  <td>CA-Passwort:</td>
 <td>
   <input name="CA_PASSWORD" type="password" size="55" value=""
     <?php if(isset($errorFelder['CA_PASSWORD'])) echo 'class="error"'; ?>>
 </td>
 </tr>
 <tr>
-  <td>CA-Domain:</td>
+  <td>CA-Domäne:</td>
 <td>
   <input name="CA_DOMAIN" type="text" size="55" value="my.dom.ain"
     <?php if(isset($errorFelder['CA_DOMAIN'])) echo 'class="error"'; ?>>
